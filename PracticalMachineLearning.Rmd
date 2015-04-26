@@ -1,0 +1,142 @@
+---
+output:
+  html_document:
+    keep_md: yes
+  pdf_document: default
+---
+##Practical Machine Learning Course Project.
+
+This Coursera Machine Learning Course project peer assignment gives opportunity to practise one of the most common tasks performed by data scientists, prediction by machine learning algorithm.
+
+### Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+
+
+###Loading Data
+
+Tasks based on given dataset.
+The original data you can find here:
+(Training Data)[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv]
+
+(Testing Data)[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv]
+
+```{r}
+
+training_dta <- read.csv("pml-training.csv", na.strings=c("", "NA", "NULL"))
+testing_dta <- read.csv("pml-testing.csv", na.strings=c("", "NA", "NULL"))
+
+```
+
+###Exploratory Data Analysis
+
+First we look which kind of data we have.
+
+```{r}
+dim(training_dta)
+dim(testing_dta)
+table(training_dta$classe)
+
+plot(training_dta$classe, col="blue", main="Classe levels in training data", xlab="classe levels", ylab="Frequency")
+
+```
+We can seen both of testing and training data has 160 variables and "Classe" A seems to bee biggest category.
+
+
+```{r}
+training_nr_of_NA = sapply(training_dta, function(x) {sum(is.na(x))})
+table(training_nr_of_NA)
+
+```
+Data seems to include lots of NA values. Those not give any valuable information for our model.
+
+###Preprocessing The Data
+
+Clear data sets out of Na values from both at training and test data.
+```{r}
+
+training_dta<-training_dta[,colSums(is.na(training_dta)) == 0]
+testing_dta <-testing_dta[,colSums(is.na(testing_dta)) == 0]
+names(training_dta)
+
+```
+We can see that after when we took away all NAs from columns we get left 60 variables. There also seems to be unneccessary variables which we can't use our Random Forest model. So we will use variables from columns 7 to 60.
+
+
+```{r}
+training_dta <- training_dta[, c(7:60)]
+testing_dta <- testing_dta[, c(7:60)]
+```
+
+We split training data two parts training_data and testing_data in order to evaluate our prediction model against training data.
+```{r}
+library(caret)
+split_keys <- createDataPartition(y = training_dta$classe, p=0.70, list=FALSE)
+training_dta <- training_dta[split_keys,]
+training_test_dta <- training_dta[-split_keys,]
+
+```
+We set 30% of the training cases in to the test set to evaluate our model.
+
+##Creating Model By Training Set
+
+We using RandomForest algorithm to create our predicting model which is usually good for this kind of classification problems.
+http://en.wikipedia.org/wiki/Random_forest
+https://www.kaggle.com/wiki/RandomForests
+
+```{r}
+#My laptop couldn't process 
+#my_predict_model <- train(classe ~., data = training_dta, method = "rf", prox = TRUE,trControl = trainControl(method = "cv", number = 4, allowParallel = TRUE))
+#in reasonable time so needed modify it to use less resources of the computer
+
+library("doSNOW")
+registerDoSNOW(makeCluster(4, type="SOCK"))
+classe <- training_dta$classe
+variables <- training_dta[-ncol(training_dta)]
+
+library(randomForest)
+my_predict_model <- randomForest(variables,classe,ntree=30,do.trace=T)
+print(my_predict_model)
+
+```
+
+##Cross Validation 
+
+We run our model against testing_data data which if 30% partition of training data.
+
+```{r}
+
+my_predictions <- predict(my_predict_model, training_test_dta, type = "class")
+confusionMatrix(my_predictions, training_test_dta$classe)
+```
+
+We can see the result at that even we run random forest has only 30 threes we get very accuracy result.
+Actually 100% which gives a sign of over fitting to the data.
+
+##Run Predictions Against Given Testing Set
+
+```{r}
+predictions <- predict(my_predict_model, testing_dta)
+predictions
+
+```
+
+##Sending Predictions Result
+
+```{r}
+pml_write_files = function(x){
+        n = length(x)
+        for(i in 1:n){
+        filename = paste0("problem_id_",i,".txt")
+         write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names =FALSE)
+  }
+}
+
+pml_write_files(predictions)
+```
+##Conclusions
+
+ Given data included a lots of NA values. For originally 160 variables we actually used 54. Predicting results gives whole 20/20 points when those sent in Coursera course site. So that concern about over fitting was "unnecessary".
+ But over all that 100% of prediction seems to be too good. So more test need to do before start to actually "using" the model.
